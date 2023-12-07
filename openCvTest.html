@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Hello OpenCV.js</title>
+</head>
+<body>
+  <!-- Include OpenCV.js -->
+  <script async src="https://docs.opencv.org/master/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+
+  <!-- HTML Markup -->
+  <input type="file" id="fileInput" />
+  <canvas id="outputCanvas" width="800" height="600"></canvas>
+  <div id="log"></div> <!-- HTML element for logging -->
+
+  <!-- JavaScript Code -->
+  <script type="text/javascript">
+    let imgElement = document.createElement('img');
+    let inputElement = document.getElementById('fileInput');
+    let outputCanvas = document.getElementById('outputCanvas');
+    let logElement = document.getElementById('log');
+    let ctx = outputCanvas.getContext('2d');
+
+    inputElement.addEventListener('change', (e) => {
+      let file = e.target.files[0];
+      if (file) {
+        let reader = new FileReader();
+        reader.onload = (readerEvent) => {
+          imgElement.src = readerEvent.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    imgElement.onload = () => {
+      // Create a Mat object from the image
+      let src = cv.imread(imgElement);
+
+      // Convert the image to grayscale
+      let gray = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+      // Apply thresholding or other preprocessing if needed
+
+      // Find contours in the image
+      let contours = new cv.MatVector();
+      let hierarchy = new cv.Mat();
+      cv.findContours(gray, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+      // Array to store sizes
+      let sizes = [];
+
+      // Iterate through the contours to identify logs and sizing plate
+      for (let i = 0; i < contours.size(); ++i) {
+        // Calculate the contour area
+        let area = cv.contourArea(contours.get(i));
+
+        // Example: Assuming logs have a minimum area, and sizing plate has a larger area
+        if (area > 1000 && area < 5000) {
+          // Draw a bounding rectangle around the log
+          let rect = cv.boundingRect(contours.get(i));
+          cv.rectangle(src, new cv.Point(rect.x, rect.y), new cv.Point(rect.x + rect.width, rect.y + rect.height), [255, 0, 0, 255], 2);
+          
+          // Calculate the diameter based on the bounding rectangle
+          let diameter = Math.max(rect.width, rect.height);
+
+          // Assuming sizing plate has a predefined diameter of 200mm
+          if (diameter > 190 && diameter < 210) {
+            // Calculate the scale
+            let scale = 200 / diameter;
+
+            // Draw a circle representing the sizing plate
+            cv.circle(src, new cv.Point(rect.x + rect.width / 2, rect.y + rect.height / 2), diameter / 2, [0, 255, 0, 255], 2);
+
+            // Example: Calculate and draw other circles on the same scale
+            let otherCircleDiameter = 150;  // Adjust with your specific requirements
+            let otherCircleRadius = otherCircleDiameter / 2;
+            let otherCircleScaledDiameter = otherCircleDiameter / scale;
+
+            cv.circle(src, new cv.Point(rect.x + rect.width / 2 + 50, rect.y + rect.height / 2), otherCircleScaledDiameter / 2, [0, 0, 255, 255], 2);
+
+            // Store size information in the array
+            sizes.push({
+              type: 'log',
+              diameter: diameter.toFixed(2),
+              scale: scale.toFixed(2)
+            });
+
+            sizes.push({
+              type: 'sizing_plate',
+              diameter: diameter.toFixed(2)
+            });
+
+            sizes.push({
+              type: 'other_circle',
+              diameter: otherCircleScaledDiameter.toFixed(2)
+            });
+          }
+        }
+      }
+
+      // Display the result on the canvas
+      cv.imshow(outputCanvas, src);
+
+      // Log information to the console
+      console.log('All Sizes:', sizes);
+
+      // Log information to the HTML element
+      logElement.innerHTML = 'All Sizes:<br>';
+      for (let i = 0; i < sizes.length; i++) {
+        logElement.innerHTML += `${sizes[i].type} - Diameter: ${sizes[i].diameter}mm`;
+        if (sizes[i].scale) {
+          logElement.innerHTML += `, Scale: ${sizes[i].scale}`;
+        }
+        logElement.innerHTML += '<br>';
+      }
+
+      // Release memory
+      src.delete();
+      gray.delete();
+      contours.delete();
+      hierarchy.delete();
+    };
+
+    function onOpenCvReady() {
+      // OpenCV.js is ready
+    }
+  </script>
+</body>
+</html>
